@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2E6B3A">
+<title>Soccer Rotation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --turf:#2E6B3A; --turf-deep:#1F4E2A; --chalk-line:rgba(250,251,247,.8);
+  --chalk:#FAFBF7; --pinnie:#FF7A1A; --pinnie-ink:#2B1500;
+  --paper:#E8EDE6; --surface:#FAFBF7; --ink:#17201A; --muted:#556258; --line:#C8D2C5;
+  --yellow:#F4C430; --yellow-ink:#3A2C00; --red:#B93229;
+  --display:"Barlow Condensed","Arial Narrow","Roboto Condensed",sans-serif;
+  --body:"Barlow","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --paper:#0F1611; --surface:#18221B; --ink:#E6ECE6; --muted:#9BA99E; --line:#2E3C32; }
+}
+:root[data-theme="dark"]{ --paper:#0F1611; --surface:#18221B; --ink:#E6ECE6; --muted:#9BA99E; --line:#2E3C32; }
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:400 16px/1.45 var(--body);-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--pinnie);outline-offset:2px}
+a{color:inherit}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px}
+
+/* top bar + nav */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;height:52px;gap:12px}
+.team{font:700 22px/1 var(--display);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.net{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.net::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--turf)}
+.net.saving::before{background:var(--pinnie)}
+.net.offline::before,.net.error::before{background:var(--red)}
+main{padding-top:18px;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs .wrap{display:grid;grid-template-columns:repeat(3,1fr)}
+nav.tabs a{display:flex;align-items:center;justify-content:center;height:58px;text-decoration:none;font:600 19px/1 var(--display);color:var(--muted);border-top:3px solid transparent}
+nav.tabs a[aria-current="page"]{color:var(--ink);border-top-color:var(--pinnie)}
+
+/* type */
+h1,.h1{font:700 34px/1.05 var(--display);margin:0}
+.h2{font:700 24px/1.1 var(--display);margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 12px;font-size:15px}
+.block{margin-top:28px}
+.back{display:inline-block;color:var(--muted);text-decoration:none;font-weight:600;font-size:15px;margin-bottom:8px}
+.meta{color:var(--muted);margin:4px 0 0}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 20px;border-radius:10px;border:2px solid var(--ink);background:transparent;font-weight:700;font-size:16px;text-decoration:none}
+.btn.primary{background:var(--pinnie);border-color:var(--pinnie);color:var(--pinnie-ink);font:700 21px/1 var(--display);letter-spacing:.01em}
+.btn.wide{width:100%}
+.btn.quiet{border-color:var(--line);color:var(--ink)}
+.btn.danger{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.link{background:none;border:0;padding:6px 0;color:var(--muted);text-decoration:underline;font-weight:600;font-size:15px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.stack{display:grid;gap:10px}
+
+/* hero (next game) */
+.hero{display:block;position:relative;overflow:hidden;text-decoration:none;color:var(--chalk);background:var(--turf);border-radius:14px;padding:22px 22px 20px}
+.hero::before{content:"";position:absolute;inset:10px;border:2px solid var(--chalk-line);border-radius:6px;pointer-events:none}
+.hero::after{content:"";position:absolute;right:-60px;top:50%;width:150px;height:150px;margin-top:-75px;border:2px solid var(--chalk-line);border-radius:50%;pointer-events:none}
+.hero-k{display:block;font-weight:600;opacity:.85;font-size:15px}
+.hero-date{display:block;font:700 40px/1 var(--display);margin:6px 0 4px}
+.hero-meta{display:block;font-size:16px;opacity:.9}
+.hero-cta{position:relative;z-index:1;display:inline-flex;margin-top:16px;background:var(--pinnie);color:var(--pinnie-ink);font:700 20px/1 var(--display);padding:12px 18px;border-radius:10px}
+
+/* game list */
+.glist{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.glist li{border-bottom:1px solid var(--line)}
+.grow{display:grid;grid-template-columns:minmax(64px,auto) 1fr auto;gap:14px;align-items:center;padding:14px 2px;text-decoration:none}
+.gdate{text-align:center;line-height:1}
+.gdate .dow{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.gdate .md{display:block;font:700 22px/1.1 var(--display);white-space:nowrap}
+.gmain strong{display:block;font:700 20px/1.1 var(--display)}
+.gmain span{color:var(--muted);font-size:14px}
+.grow.cancelled .gmain strong,.grow.cancelled .md{text-decoration:line-through;color:var(--muted)}
+.chip{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;border:1.5px solid var(--line);white-space:nowrap}
+.chip.live{background:var(--pinnie);border-color:var(--pinnie);color:var(--pinnie-ink)}
+.chip.final{background:var(--turf);border-color:var(--turf);color:var(--chalk)}
+.chip.needs{background:var(--yellow);border-color:var(--yellow);color:var(--yellow-ink)}
+.chip.cancelled{color:var(--muted)}
+
+/* check-in grid */
+.checkin{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.cbtn{min-height:60px;border-radius:12px;border:2px solid var(--line);background:var(--surface);font:700 22px/1 var(--display);text-align:left;padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+.cbtn::after{content:"";width:22px;height:22px;border-radius:50%;border:2px solid var(--line)}
+.cbtn[aria-pressed="true"]{border-color:var(--turf);background:var(--turf);color:var(--chalk)}
+.cbtn[aria-pressed="true"]::after{background:var(--chalk);border-color:var(--chalk);box-shadow:inset 0 0 0 5px var(--turf)}
+
+/* quarter track (a real sequence: Q1-Q8) */
+.qtrack{display:grid;grid-template-columns:repeat(4,1fr) 14px repeat(4,1fr);gap:4px;margin:18px 0 6px}
+.qseg{height:8px;border-radius:4px;background:var(--line)}
+.qseg.done{background:var(--turf)}
+.qseg.cur{background:var(--pinnie)}
+.qlab{display:grid;grid-template-columns:repeat(4,1fr) 14px repeat(4,1fr);gap:4px;font-size:12px;color:var(--muted);text-align:center;font-weight:600}
+
+/* the pitch */
+.qcard{margin-top:14px}
+.qhead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.qhead .h1{font-size:40px}
+.pitch{position:relative;background:var(--turf);border-radius:14px;padding:22px 18px;
+  background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 44px,transparent 44px 88px)}
+.pitch::before{content:"";position:absolute;inset:9px;border:2px solid var(--chalk-line);border-radius:5px;pointer-events:none;
+  background:linear-gradient(var(--chalk-line),var(--chalk-line)) center/2px 100% no-repeat}
+.pitch::after{content:"";position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border:2px solid var(--chalk-line);border-radius:50%;pointer-events:none}
+.pgrid{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:16px 34px}
+.bib{position:relative;min-height:70px;border:0;border-radius:10px 10px 16px 16px;background:var(--pinnie);color:var(--pinnie-ink);
+  font:700 24px/1 var(--display);box-shadow:0 3px 0 rgba(0,0,0,.28);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 6px;transition:transform .12s}
+.bib small{font:600 12px/1 var(--body);opacity:.8}
+.bib::before{content:"";position:absolute;top:0;left:50%;width:30%;height:9px;margin-left:-15%;border-radius:0 0 12px 12px;background:rgba(0,0,0,.14)}
+.bib.sel{outline:3px solid var(--chalk);outline-offset:3px;transform:translateY(-3px)}
+.slot{min-height:70px;border:2px dashed var(--chalk-line);border-radius:10px;color:var(--chalk);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;opacity:.85}
+.bench{margin-top:12px;padding:12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.bench-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.bench-h strong{font:700 19px/1 var(--display)}
+.bench-h span{font-size:13px;color:var(--muted)}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+.bchip{position:relative;min-height:56px;border-radius:10px;border:2px solid var(--line);background:var(--paper);text-align:left;padding:7px 10px 7px 12px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.bchip b{font:700 20px/1 var(--display)}
+.bchip small{font-size:12px;color:var(--muted);font-weight:600}
+.bchip.sel{border-color:var(--pinnie);box-shadow:0 0 0 2px var(--pinnie)}
+.bchip.must{border-color:var(--yellow)}
+.bchip.must small{color:var(--ink)}
+.ycard{display:inline-block;width:9px;height:12px;background:var(--yellow);border-radius:2px;transform:rotate(8deg);margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px rgba(0,0,0,.15)}
+.hint{font-size:14px;color:var(--muted);margin:10px 0 0}
+.warns{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+.warns li{background:var(--yellow);color:var(--yellow-ink);border-radius:8px;padding:8px 12px;font-weight:600;font-size:14px}
+.qactions{display:grid;gap:8px;margin-top:14px}
+
+/* here/out chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.pchip{border-radius:999px;border:2px solid var(--turf);background:var(--surface);padding:8px 14px;font-weight:700;display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.pchip small{font-weight:600;font-size:12px;color:var(--muted)}
+.pchip.out{border-color:var(--line);color:var(--muted);text-decoration:line-through}
+.pchip.out small{text-decoration:none}
+
+/* tables */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:700;color:var(--muted);font-size:13px}
+tr:last-child td{border-bottom:0}
+td.name,th.name{text-align:left;position:sticky;left:0;background:var(--surface);font-weight:700;padding-left:12px}
+td.num{font-variant-numeric:tabular-nums}
+.qbtn{border:1.5px solid var(--line);background:var(--paper);border-radius:6px;padding:3px 7px;font-weight:700;font-size:13px}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%}
+.dot.on{background:var(--turf)}
+.dot.off{border:2px solid var(--line)}
+.bal{position:relative;width:110px;height:14px;margin:0 auto}
+.bal::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
+.bal i{position:absolute;top:2px;height:10px;border-radius:3px}
+.bal i.pos{left:50%;background:var(--turf)}
+.bal i.neg{right:50%;background:var(--pinnie)}
+.lede{font-size:18px;margin:6px 0 16px;max-width:36em}
+
+/* forms */
+.field{display:grid;gap:4px;font-size:14px;font-weight:600;color:var(--muted)}
+.field input{min-height:46px;border:2px solid var(--line);border-radius:10px;background:var(--surface);padding:0 12px;color:var(--ink);font-weight:500;font-size:16px}
+details.det{margin-top:28px;border-top:1px solid var(--line);padding-top:14px}
+details.det summary{font:700 20px/1.2 var(--display);cursor:pointer}
+.plist{display:grid;gap:8px}
+.prow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.prow input{min-height:46px;border:2px solid var(--line);border-radius:10px;background:var(--surface);padding:0 12px;font-weight:600;font-size:16px}
+.prow.inactive input{color:var(--muted);text-decoration:line-through}
+
+/* manual results */
+.mrow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.mrow b{font:700 21px/1 var(--display)}
+.tog{min-height:40px;border-radius:999px;border:2px solid var(--line);background:var(--surface);padding:0 12px;font-weight:700;font-size:14px}
+.tog[aria-pressed="true"]{background:var(--turf);border-color:var(--turf);color:var(--chalk)}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:var(--surface);font-weight:700;font-size:20px;line-height:1}
+.step output{min-width:28px;text-align:center;font:700 22px/1 var(--display)}
+
+/* bottom sheet */
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(10,20,12,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.panel{background:var(--surface);width:100%;max-width:640px;max-height:88%;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+.seg{display:inline-grid;grid-template-columns:repeat(3,auto);border:2px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:8px 10px;font-weight:700;font-size:13px;min-height:40px}
+.seg button+button{border-left:2px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.srow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);gap:10px}
+.srow b{font:700 20px/1 var(--display)}
+
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast[hidden]{display:none}
+.empty{padding:28px 18px;border:2px dashed var(--line);border-radius:12px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><span class="team" id="team">Soccer Rotation</span><span class="net" id="net">Loading</span></div></header>
+<main class="wrap" id="main"><p class="sub">Loading the season…</p></main>
+<nav class="tabs" aria-label="Sections"><div class="wrap">
+  <a href="#/games" data-tab="games">Games</a>
+  <a href="#/season" data-tab="season">Season</a>
+  <a href="#/team" data-tab="team">Team</a>
+</div></nav>
+<div class="sheet" id="sheet" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+"use strict";
+// ==LOGIC START==
+const Q = 8;   // quarters per game
+const ON = 4;  // players on the field
+let S = null;  // current view of the season data
+
+const byId = id => S.players.find(p => p.id === id);
+const nameOf = id => (byId(id) || {}).name || "?";
+const rosterIndex = id => S.players.findIndex(p => p.id === id);
+const sortRoster = ids => [...ids].sort((a, b) => rosterIndex(a) - rosterIndex(b));
+
+function hashFrac(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) / 4294967296;
+}
+
+function* combos(arr, k, start = 0, acc = []) {
+  if (acc.length === k) { yield acc.slice(); return; }
+  for (let i = start; i <= arr.length - (k - acc.length); i++) {
+    acc.push(arr[i]); yield* combos(arr, k, i + 1, acc); acc.pop();
+  }
+}
+
+// Season totals. Fair share = for every quarter a player was checked in,
+// 4 / (players checked in that quarter), capped at 1.
+function seasonStats(data) {
+  const st = {};
+  const get = id => (st[id] ||= { played: 0, avail: 0, expected: 0, games: 0 });
+  data.players.forEach(p => get(p.id));
+  for (const g of data.games) {
+    if (g.status === "cancelled") continue;
+    if (g.mode === "manual") {
+      if (g.needsEntry) continue;
+      const n = g.attendance.length;
+      for (const id of g.attendance) {
+        const s = get(id);
+        s.games++; s.avail += Q; s.expected += Q * Math.min(1, ON / n);
+        s.played += Number(g.manualPlayed[id] || 0);
+      }
+    } else {
+      const seen = new Set();
+      for (const qq of g.quarters) {
+        const n = qq.available.length;
+        for (const id of qq.available) { const s = get(id); s.avail++; s.expected += Math.min(1, ON / n); seen.add(id); }
+        for (const id of qq.lineup) get(id).played++;
+      }
+      seen.forEach(id => get(id).games++);
+    }
+  }
+  for (const id in st) {
+    const s = st[id];
+    s.balance = s.played - s.expected;
+    s.share = s.avail ? s.played / s.avail : null;
+  }
+  return st;
+}
+
+// In-game context for quarter q (0-based) given available player ids.
+function quarterContext(g, q, A) {
+  const prev = g.quarters.slice(0, q);
+  const hs = q < 4 ? 0 : 4;
+  const ctx = {};
+  for (const id of A) {
+    let streak = 0;
+    for (let k = q - 1; k >= 0; k--) {
+      const qq = prev[k];
+      if (!qq.available.includes(id) || qq.lineup.includes(id)) break;
+      streak++;
+    }
+    ctx[id] = {
+      streak,
+      playedHalf: prev.slice(hs).filter(qq => qq.lineup.includes(id)).length,
+      playedGame: prev.filter(qq => qq.lineup.includes(id)).length,
+    };
+  }
+  return { ctx, remainingInHalf: hs + 3 - q, remainingInGame: Q - 1 - q };
+}
+
+// Suggest the lineup for quarter q.
+// Hard rules: nobody sits a 3rd straight quarter; everybody plays at least once per half.
+// Within the rules, players furthest below their season fair share go in first.
+function suggest(g, q, A) {
+  const target = Math.min(ON, A.length);
+  if (A.length <= ON) return { lineup: sortRoster(A), note: "" };
+  const st = seasonStats(S);
+  const { ctx, remainingInHalf, remainingInGame } = quarterContext(g, q, A);
+  const score = {};
+  for (const id of A) {
+    const c = ctx[id];
+    score[id] = -((st[id] && st[id].balance) || 0) * 100 + c.streak * 6 + (c.playedHalf === 0 ? 3 : 0)
+      - c.playedGame * 2 + hashFrac(g.id + "|" + q + "|" + id);
+  }
+  const hardOk = C => {
+    const s = new Set(C);
+    return A.every(id => s.has(id) || (ctx[id].streak < 2 && !(remainingInHalf === 0 && ctx[id].playedHalf === 0)));
+  };
+  // Deadline check so this quarter doesn't paint later quarters into a corner.
+  const futureOk = C => {
+    const s = new Set(C);
+    const ds = [];
+    for (const id of A) {
+      const c = ctx[id];
+      let d;
+      if (s.has(id)) d = 3;
+      else { d = 3 - (c.streak + 1); if (c.playedHalf === 0) d = Math.min(d, remainingInHalf); }
+      if (d <= remainingInGame) ds.push(d);
+    }
+    const maxD = ds.length ? Math.max(...ds) : 0;
+    for (let k = 1; k <= maxD; k++) if (ds.filter(d => d <= k).length > ON * k) return false;
+    return true;
+  };
+  let best = null, bestS = -Infinity, hard = null, hardS = -Infinity;
+  if (A.length <= 16) {
+    for (const C of combos(A, target)) {
+      if (!hardOk(C)) continue;
+      const sc = C.reduce((t, id) => t + score[id], 0);
+      if (sc > hardS) { hardS = sc; hard = C; }
+      if (sc > bestS && futureOk(C)) { bestS = sc; best = C; }
+    }
+  }
+  if (best) return { lineup: sortRoster(best), note: "" };
+  if (hard) return { lineup: sortRoster(hard), note: "This lineup meets the rules now, but a later quarter may not be able to." };
+  const pri = id => (ctx[id].streak >= 2 ? 1000 : 0) + (remainingInHalf === 0 && ctx[id].playedHalf === 0 ? 500 : 0) + score[id];
+  const fb = [...A].sort((a, b) => pri(b) - pri(a)).slice(0, target);
+  return { lineup: sortRoster(fb), note: "Not every rule can be met with the players here. The players furthest behind go in first." };
+}
+
+function lineupWarnings(g, q, A, lineup) {
+  const { ctx, remainingInHalf } = quarterContext(g, q, A);
+  const on = new Set(lineup);
+  const w = [];
+  for (const id of A) {
+    if (on.has(id)) continue;
+    if (ctx[id].streak >= 2) w.push(nameOf(id) + " would sit a 3rd quarter in a row");
+    if (remainingInHalf === 0 && ctx[id].playedHalf === 0) w.push(nameOf(id) + " hasn't played yet this half");
+  }
+  const target = Math.min(ON, A.length);
+  if (lineup.length !== target) w.push(lineup.length + " on the field (normally " + target + ")");
+  return w;
+}
+// ==LOGIC END==
+
+/* ---------- sync: server copy + queue of pending changes ---------- */
+let server = { version: 0, data: null };
+let pending = [];          // [{ label, fn }] replayable mutations
+let flushing = false, retryTimer = null, loadError = "";
+const ui = { drafts: {}, sel: null, editQ: null, net: "ok", renderPending: false, cur: null };
+
+function normalize(d) {
+  d.teamName ||= "Toddler Soccer";
+  d.quarterMinutes ||= 5;
+  d.players ||= [];
+  d.games ||= [];
+  d.games.forEach(g => {
+    g.attendance ||= []; g.available ||= []; g.quarters ||= []; g.manualPlayed ||= {};
+    g.mode ||= "live"; g.time ||= "10:15"; g.opponent ??= ""; g.status ||= "scheduled";
+  });
+  return d;
+}
+function computeView() {
+  const d = normalize(structuredClone(server.data));
+  for (const op of pending) { try { op.fn(d); } catch (e) { console.error(e); } }
+  return d;
+}
+function refresh() { S = server.data ? computeView() : null; render(); }
+function op(label, fn) { pending.push({ label, fn }); refresh(); flush(); }
+const G = (d, id) => d.games.find(x => x.id === id);
+
+function headers() {
+  const h = { "content-type": "application/json" };
+  try { const k = localStorage.getItem("editKey"); if (k) h["X-Edit-Key"] = k; } catch (e) {}
+  return h;
+}
+function setNet(s) { ui.net = s; renderNet(); }
+
+async function load() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) throw new Error("Server returned " + r.status);
+    const j = await r.json();
+    server = { version: j.version, data: normalize(j.data) };
+    loadError = ""; setNet("ok");
+  } catch (e) {
+    loadError = "Couldn't load the season. Check your connection, then reload.";
+    setNet("offline");
+  }
+  refresh();
+}
+
+async function flush() {
+  if (flushing || !pending.length || !server.data) return;
+  flushing = true; setNet("saving");
+  try {
+    while (pending.length) {
+      const batch = pending.slice();
+      const draft = normalize(structuredClone(server.data));
+      let applied = 0;
+      for (const o of batch) {
+        let r; try { r = o.fn(draft); } catch (e) { r = false; }
+        if (r === false) toast(o.label + " was skipped because someone else already changed it.");
+        else applied++;
+      }
+      if (!applied) { pending = pending.slice(batch.length); refresh(); continue; }
+      let res;
+      try {
+        res = await fetch("/api/state", { method: "PUT", headers: headers(), body: JSON.stringify({ baseVersion: server.version, data: draft }) });
+      } catch (e) {
+        setNet("offline"); clearTimeout(retryTimer); retryTimer = setTimeout(flush, 5000); return;
+      }
+      if (res.ok) {
+        const j = await res.json();
+        server = { version: j.version, data: draft };
+        pending = pending.slice(batch.length);
+      } else if (res.status === 409) {
+        const j = await res.json();
+        if (j.data) server = { version: j.version, data: normalize(j.data) };
+      } else if (res.status === 401) {
+        const k = prompt("Enter the team edit key to save changes");
+        if (k) { try { localStorage.setItem("editKey", k); } catch (e) {} }
+        else { pending = pending.slice(batch.length); toast("Changes discarded. An edit key is required to save."); }
+      } else {
+        const j = await res.json().catch(() => ({}));
+        pending = pending.slice(batch.length);
+        toast("Save failed: " + (j.error || res.status)); setNet("error");
+      }
+      refresh();
+    }
+    setNet("ok");
+  } finally { flushing = false; }
+}
+
+async function poll() {
+  if (document.hidden || flushing || pending.length || !server.data) return;
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.version !== server.version) { server = { version: j.version, data: normalize(j.data) }; refresh(); }
+    if (ui.net !== "ok") setNet("ok");
+  } catch (e) { setNet("offline"); }
+}
+setInterval(poll, 6000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+window.addEventListener("online", flush);
+window.addEventListener("beforeunload", e => { if (pending.length) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const parseDate = d => { const [y, m, dd] = d.split("-").map(Number); return new Date(y, m - 1, dd); };
+const fmtDate = (d, o) => parseDate(d).toLocaleDateString(undefined, o || { weekday: "short", month: "short", day: "numeric" });
+const fmtTime = t => { const [h, m] = t.split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); };
+const ymd = dt => dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0");
+const today = () => ymd(new Date());
+const addDays = (d, n) => { const x = parseDate(d); x.setDate(x.getDate() + n); return ymd(x); };
+const f1 = n => (Math.round(n * 10) / 10).toFixed(1);
+const pct = n => n == null ? "–" : Math.round(n * 100) + "%";
+const sortedGames = () => [...S.games].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time) || a.id.localeCompare(b.id));
+const gameNum = g => sortedGames().findIndex(x => x.id === g.id) + 1;
+const activePlayers = () => S.players.filter(p => p.active);
+function balText(b) { if (Math.abs(b) < 0.05) return "even"; return b < 0 ? "owed " + f1(-b) : "+" + f1(b); }
+function statusChip(g) {
+  if (g.status === "cancelled") return '<span class="chip cancelled">Cancelled</span>';
+  if (g.status === "in_progress") return '<span class="chip live">Live</span>';
+  if (g.status === "final" && g.needsEntry) return '<span class="chip needs">Needs results</span>';
+  if (g.status === "final") return '<span class="chip final">Final</span>';
+  return '<span class="chip">Upcoming</span>';
+}
+let toastTimer;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3500); }
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function isTyping() { const a = document.activeElement; return a && a.tagName === "INPUT" && $("main").contains(a); }
+
+/* ---------- routing + chrome ---------- */
+function route() {
+  const h = location.hash.replace(/^#\/?/, "").split("/");
+  if (h[0] === "game" && h[1]) return { name: "game", id: h[1] };
+  if (h[0] === "season" || h[0] === "team") return { name: h[0] };
+  return { name: "games" };
+}
+function renderNet() {
+  const n = $("net");
+  n.className = "net " + (ui.net === "ok" ? "" : ui.net);
+  n.textContent = ui.net === "saving" ? "Saving" : ui.net === "offline" ? (pending.length ? pending.length + " unsaved, retrying" : "Offline") : ui.net === "error" ? "Save error" : "Saved";
+}
+function render() {
+  if (isTyping()) { ui.renderPending = true; return; }
+  ui.renderPending = false;
+  const r = route();
+  document.querySelectorAll("nav.tabs a").forEach(a => {
+    const on = a.dataset.tab === (r.name === "game" ? "games" : r.name);
+    on ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current");
+  });
+  renderNet();
+  if (!S) { $("main").innerHTML = '<div class="empty">' + esc(loadError || "Loading the season…") + (loadError ? '<p><button class="btn quiet" data-act="reload">Reload</button></p>' : "") + "</div>"; return; }
+  $("team").textContent = S.teamName;
+  document.title = S.teamName + " rotation";
+  let html;
+  if (r.name === "game") { const g = S.games.find(x => x.id === r.id); html = g ? renderGame(g) : '<div class="empty">That game no longer exists. <a href="#/games">See all games</a></div>'; }
+  else if (r.name === "season") html = renderSeason();
+  else if (r.name === "team") html = renderTeam();
+  else html = renderGames();
+  $("main").innerHTML = html;
+  renderSheet();
+}
+window.addEventListener("hashchange", () => { ui.sel = null; ui.editQ = null; render(); window.scrollTo(0, 0); });
+document.addEventListener("focusout", () => setTimeout(() => { if (ui.renderPending && !isTyping()) render(); }, 0));
+
+/* ---------- games list ---------- */
+function renderGames() {
+  const games = sortedGames();
+  const next = games.find(g => g.status === "in_progress")
+    || games.find(g => g.status === "scheduled" && g.date >= today())
+    || games.find(g => g.status === "scheduled");
+  let html = "";
+  if (next) {
+    const live = next.status === "in_progress";
+    const cta = live ? "Go to quarter " + Math.min(Q, next.quarters.length + 1) : "Check in players";
+    html += `<a class="hero" href="#/game/${next.id}">
+      <span class="hero-k">${live ? "Live now" : "Next game"}</span>
+      <span class="hero-date">${esc(fmtDate(next.date, { weekday: "long", month: "long", day: "numeric" }))}</span>
+      <span class="hero-meta">Game ${gameNum(next)} at ${esc(fmtTime(next.time))}${next.opponent ? " vs " + esc(next.opponent) : ""}</span>
+      <span class="hero-cta">${cta}</span></a>`;
+  }
+  html += `<section class="block"><h2 class="h2">Schedule</h2><ul class="glist">` + games.map(g => {
+    const sub = [fmtTime(g.time), g.opponent ? "vs " + g.opponent : ""].filter(Boolean).join(", ");
+    return `<li><a class="grow ${g.status === "cancelled" ? "cancelled" : ""}" href="#/game/${g.id}">
+      <span class="gdate"><span class="dow">${esc(fmtDate(g.date, { weekday: "short" }))}</span><span class="md">${esc(fmtDate(g.date, { month: "short", day: "numeric" }))}</span></span>
+      <span class="gmain"><strong>Game ${gameNum(g)}</strong><span>${esc(sub)}</span></span>${statusChip(g)}</a></li>`;
+  }).join("") + `</ul><p><button class="btn quiet" data-act="addGame">Add a makeup game</button></p></section>`;
+  return html;
+}
+
+/* ---------- game screens ---------- */
+function gameHead(g) {
+  return `<a class="back" href="#/games">All games</a>
+    <div class="row" style="justify-content:space-between"><h1>Game ${gameNum(g)}</h1>${statusChip(g)}</div>
+    <p class="meta">${esc(fmtDate(g.date, { weekday: "long", month: "long", day: "numeric" }))} at ${esc(fmtTime(g.time))}${g.opponent ? " vs " + esc(g.opponent) : ""}</p>`;
+}
+function hasData(g) { return g.quarters.length > 0 || Object.values(g.manualPlayed).some(v => v > 0); }
+function detailsSection(g) {
+  return `<details class="det"><summary>Game details</summary><div class="stack" style="margin-top:12px">
+    <label class="field">Date<input type="date" id="det-date" value="${esc(g.date)}"></label>
+    <label class="field">Start time<input type="time" id="det-time" value="${esc(g.time)}"></label>
+    <label class="field">Opponent (optional)<input type="text" id="det-opp" value="${esc(g.opponent)}" placeholder="Team name"></label>
+    <div class="row"><button class="btn" data-act="saveDetails" data-g="${g.id}">Save details</button>
+    ${!hasData(g) ? `<button class="btn danger" data-act="deleteGame" data-g="${g.id}">Delete game</button>` : ""}</div></div></details>`;
+}
+function renderGame(g) {
+  if (g.status === "cancelled") return gameHead(g) + `<section class="block"><div class="empty">This game was cancelled and doesn't count toward playing time.</div>
+    <p><button class="btn" data-act="restoreGame" data-g="${g.id}">Restore game</button></p></section>` + detailsSection(g);
+  if (g.mode === "manual") return renderManual(g);
+  if (g.status === "scheduled") return renderCheckin(g);
+  return renderLive(g);
+}
+
+function renderCheckin(g) {
+  const act = activePlayers();
+  const n = g.attendance.filter(id => byId(id) && byId(id).active).length;
+  return gameHead(g) + `<section class="block"><h2 class="h2">Who's here today?</h2>
+    <p class="sub">Tap each player as they arrive. ${n} of ${act.length} checked in.</p>
+    <div class="checkin">${act.map(p => `<button class="cbtn" data-act="checkin" data-g="${g.id}" data-id="${p.id}" aria-pressed="${g.attendance.includes(p.id)}">${esc(p.name)}</button>`).join("")}</div>
+    <div class="stack" style="margin-top:16px">
+      <button class="btn primary wide" data-act="start" data-g="${g.id}" ${n ? "" : "disabled"}>Start game with ${n} player${n === 1 ? "" : "s"}</button>
+      <div class="row"><button class="btn quiet" data-act="cancelGame" data-g="${g.id}">Cancel for weather</button>
+      <button class="btn quiet" data-act="toManual" data-g="${g.id}">Enter results instead</button></div>
+    </div></section>` + detailsSection(g);
+}
+
+function qTrack(g, cur) {
+  const seg = i => `<span class="qseg ${i < g.quarters.length ? "done" : i === cur ? "cur" : ""}"></span>`;
+  const lab = i => `<span>Q${i + 1}</span>`;
+  const r = [0, 1, 2, 3].map(seg).join("") + "<span></span>" + [4, 5, 6, 7].map(seg).join("");
+  const l = [0, 1, 2, 3].map(lab).join("") + "<span></span>" + [4, 5, 6, 7].map(lab).join("");
+  return `<div class="qtrack" aria-hidden="true">${r}</div><div class="qlab" aria-hidden="true">${l}</div>`;
+}
+
+function getDraft(g, q, A) {
+  const key = g.id + ":" + q;
+  let dr = ui.drafts[key];
+  if (!dr || !dr.touched) {
+    const s = suggest(g, q, A);
+    dr = ui.drafts[key] = { lineup: s.lineup, note: s.note, touched: false };
+  } else dr.lineup = dr.lineup.filter(id => A.includes(id));
+  return { key, dr };
+}
+
+function renderLive(g) {
+  const q = g.quarters.length;
+  const A = g.available.filter(id => byId(id));
+  let html = gameHead(g);
+  if (g.status === "in_progress" && q < Q) {
+    const { key, dr } = getDraft(g, q, A);
+    ui.cur = { gid: g.id, q, key, A };
+    const { ctx, remainingInHalf } = quarterContext(g, q, A);
+    const st = seasonStats(S);
+    const field = dr.lineup, bench = sortRoster(A.filter(id => !field.includes(id)));
+    const sel = ui.sel && ui.sel.key === key ? ui.sel.id : null;
+    const target = Math.min(ON, A.length);
+    const warns = lineupWarnings(g, q, A, field);
+    if (dr.note && !dr.touched) warns.unshift(dr.note);
+    const slots = field.map(id => `<button class="bib ${sel === id ? "sel" : ""}" data-act="tap" data-id="${id}" aria-pressed="${sel === id}">${esc(nameOf(id))}<small>${ctx[id].playedGame} played</small></button>`);
+    for (let i = field.length; i < target; i++) slots.push('<div class="slot">Open spot</div>');
+    const benchHtml = bench.map(id => {
+      const c = ctx[id];
+      const must = c.streak >= 2 ? "Sat 2 in a row" : (c.playedHalf === 0 && remainingInHalf <= 1 ? "Not in yet this half" : "");
+      const info = must ? `<span class="ycard"></span>${must}` : `${c.playedGame} played, ${balText(st[id].balance)}`;
+      return `<button class="bchip ${sel === id ? "sel" : ""} ${must ? "must" : ""}" data-act="tap" data-id="${id}" aria-pressed="${sel === id}"><b>${esc(nameOf(id))}</b><small>${info}</small></button>`;
+    }).join("") || '<span class="sub">Nobody on the bench</span>';
+    html += qTrack(g, q) + `<section class="qcard">
+      <div class="qhead"><span class="h1">Quarter ${q + 1}</span><span class="sub" style="margin:0">${q < 4 ? "First half" : "Second half"}${dr.touched ? ", edited" : ""}</span></div>
+      <div class="pitch"><div class="pgrid">${slots.join("") || '<div class="slot">Check in players below</div>'}</div></div>
+      <div class="bench"><div class="bench-h"><strong>Bench</strong><span>season balance in quarters</span></div><div class="bgrid">${benchHtml}</div></div>
+      <p class="hint">Tap a player on the field, then one on the bench, to swap them. Tap a player twice to move them alone.</p>
+      ${warns.length ? `<ul class="warns">${warns.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+      <div class="qactions">
+        <button class="btn primary wide" data-act="confirmQ" ${A.length ? "" : "disabled"}>Confirm quarter ${q + 1}</button>
+        <div class="row">${dr.touched ? `<button class="btn quiet" data-act="resetDraft">Use suggestion</button>` : ""}
+        ${q > 0 ? `<button class="btn quiet" data-act="undoQ" data-g="${g.id}" data-q="${q - 1}">Undo quarter ${q}</button>` : ""}</div>
+      </div></section>`;
+  } else if (g.status === "in_progress") {
+    html += qTrack(g, Q) + `<section class="block"><div class="empty">All 8 quarters are recorded. Review the grid below, then finish the game.</div>
+      <div class="stack" style="margin-top:12px"><button class="btn primary wide" data-act="finish" data-g="${g.id}">Finish game</button>
+      <button class="btn quiet" data-act="undoQ" data-g="${g.id}" data-q="${Q - 1}">Undo quarter 8</button></div></section>`;
+  } else {
+    html += `<section class="block"><p class="sub">Tap a quarter in the grid to correct it. Changes update season totals right away.</p>
+      <button class="btn quiet" data-act="reopen" data-g="${g.id}">Reopen game</button></section>`;
+  }
+  if (g.status === "in_progress") html += availSection(g);
+  html += quarterGrid(g) + detailsSection(g);
+  return html;
+}
+
+function availSection(g) {
+  return `<section class="block"><h2 class="h2">Who's here</h2>
+    <p class="sub">Mark a player out for an injury or early pickup, or check in a late arrival. The suggestion updates right away.</p>
+    <div class="chips">${activePlayers().map(p => { const on = g.available.includes(p.id);
+      return `<button class="pchip ${on ? "" : "out"}" data-act="toggleAvail" data-g="${g.id}" data-id="${p.id}" aria-pressed="${on}">${esc(p.name)}<small>${on ? "Here" : "Out"}</small></button>`; }).join("")}</div></section>`;
+}
+
+function gamePlayers(g) {
+  const ids = new Set([...g.attendance, ...g.available]);
+  g.quarters.forEach(qq => qq.available.forEach(id => ids.add(id)));
+  return S.players.filter(p => ids.has(p.id)).map(p => p.id);
+}
+function quarterGrid(g) {
+  const ids = gamePlayers(g);
+  if (!g.quarters.length) return "";
+  const mins = S.quarterMinutes;
+  const head = Array.from({ length: Q }, (_, i) => i < g.quarters.length
+    ? `<th><button class="qbtn" data-act="editQ" data-g="${g.id}" data-q="${i}" aria-label="Edit quarter ${i + 1}">Q${i + 1}</button></th>` : `<th>Q${i + 1}</th>`).join("");
+  const rows = ids.map(id => {
+    let tot = 0;
+    const cells = Array.from({ length: Q }, (_, i) => {
+      const qq = g.quarters[i];
+      if (!qq || !qq.available.includes(id)) return "<td></td>";
+      const on = qq.lineup.includes(id); if (on) tot++;
+      return `<td><span class="dot ${on ? "on" : "off"}" title="${on ? "Played" : "Sat"}"></span></td>`;
+    }).join("");
+    return `<tr><td class="name">${esc(nameOf(id))}</td>${cells}<td class="num"><b>${tot}</b></td><td class="num">${tot * mins}m</td></tr>`;
+  }).join("");
+  return `<section class="block"><h2 class="h2">Quarter by quarter</h2>
+    <p class="sub">Filled dot played, open dot sat, blank was out. Tap a quarter to fix what happened.</p>
+    <div class="tscroll"><table><thead><tr><th class="name">Player</th>${head}<th>Qtrs</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+function renderSheet() {
+  const el = $("sheet");
+  if (!ui.editQ) { el.hidden = true; el.innerHTML = ""; return; }
+  const g = S.games.find(x => x.id === ui.editQ.gid);
+  const qq = g && g.quarters[ui.editQ.q];
+  if (!qq) { ui.editQ = null; el.hidden = true; el.innerHTML = ""; return; }
+  const ids = S.players.filter(p => p.active || qq.available.includes(p.id)).map(p => p.id);
+  const rows = ids.map(id => {
+    const s = qq.lineup.includes(id) ? "played" : qq.available.includes(id) ? "sat" : "out";
+    const b = (v, t) => `<button data-act="setQ" data-id="${id}" data-v="${v}" aria-pressed="${s === v}">${t}</button>`;
+    return `<div class="srow"><b>${esc(nameOf(id))}</b><span class="seg">${b("played", "Played")}${b("sat", "Sat")}${b("out", "Out")}</span></div>`;
+  }).join("");
+  el.hidden = false;
+  el.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="Edit quarter ${ui.editQ.q + 1}">
+    <div class="row" style="justify-content:space-between"><span class="h2">Quarter ${ui.editQ.q + 1}</span><span class="sub" style="margin:0">${qq.lineup.length} played</span></div>
+    <p class="sub">Record what actually happened. If a sub came in mid-quarter, mark both players as played.</p>
+    ${rows}<div style="margin-top:14px"><button class="btn primary wide" data-act="closeSheet">Done</button></div></div>`;
+}
+
+function renderManual(g) {
+  const act = activePlayers();
+  const here = g.attendance.filter(id => byId(id));
+  const total = here.reduce((t, id) => t + Number(g.manualPlayed[id] || 0), 0);
+  const slots = Q * Math.min(ON, here.length);
+  const rows = act.map(p => {
+    const on = g.attendance.includes(p.id), v = Number(g.manualPlayed[p.id] || 0);
+    return `<div class="mrow"><b>${esc(p.name)}</b>
+      <button class="tog" data-act="manualHere" data-g="${g.id}" data-id="${p.id}" aria-pressed="${on}">${on ? "Here" : "Absent"}</button>
+      <span class="step"><button data-act="manualStep" data-g="${g.id}" data-id="${p.id}" data-d="-1" ${on && v > 0 ? "" : "disabled"} aria-label="One fewer quarter for ${esc(p.name)}">−</button>
+      <output>${on ? v : "–"}</output>
+      <button data-act="manualStep" data-g="${g.id}" data-id="${p.id}" data-d="1" ${on && v < Q ? "" : "disabled"} aria-label="One more quarter for ${esc(p.name)}">+</button></span></div>`;
+  }).join("");
+  return gameHead(g) + `<section class="block"><h2 class="h2">Game results</h2>
+    <p class="sub">Mark who came and how many quarters each player played. ${total} of ${slots} quarter spots filled.</p>
+    ${rows}
+    <div class="stack" style="margin-top:16px">
+      ${g.needsEntry ? `<button class="btn primary wide" data-act="saveManual" data-g="${g.id}" ${here.length ? "" : "disabled"}>Save results</button>`
+        : `<p class="sub">Results are saved and count toward the season. Edits save as you go.</p>`}
+      <div class="row">${!hasData(g) ? `<button class="btn quiet" data-act="toLive" data-g="${g.id}">Track quarter by quarter instead</button>` : ""}
+      <button class="btn quiet" data-act="cancelGame" data-g="${g.id}">Mark cancelled</button></div>
+    </div></section>` + detailsSection(g);
+}
+
+/* ---------- season ---------- */
+function seasonData() {
+  const st = seasonStats(S);
+  const players = S.players.filter(p => p.active || st[p.id].avail);
+  const counted = sortedGames().filter(g => g.status !== "cancelled" && (g.mode === "manual" ? !g.needsEntry : g.quarters.length));
+  return { st, players, counted };
+}
+function renderSeason() {
+  const { st, players, counted } = seasonData();
+  const mins = S.quarterMinutes;
+  if (!counted.length) return `<h1>Season</h1><div class="empty" style="margin-top:16px">Totals appear once a quarter is confirmed or past results are entered.</div>`;
+  const shares = players.map(p => st[p.id].share).filter(v => v != null);
+  const lo = Math.min(...shares), hi = Math.max(...shares);
+  const scale = Math.max(1, ...players.map(p => Math.abs(st[p.id].balance)));
+  const rows = [...players].sort((a, b) => st[a.id].balance - st[b.id].balance).map(p => {
+    const s = st[p.id], w = Math.abs(s.balance) / scale * 50;
+    return `<tr><td class="name">${esc(p.name)}</td><td class="num">${s.games}</td><td class="num">${s.played}</td><td class="num">${s.played * mins}m</td>
+      <td class="num">${pct(s.share)}</td><td class="num">${s.avail ? balText(s.balance) : "–"}</td>
+      <td><div class="bal" aria-hidden="true"><i class="${s.balance >= 0 ? "pos" : "neg"}" style="width:${w}%"></i></div></td></tr>`;
+  }).join("");
+  const allGames = sortedGames().filter(g => g.status !== "cancelled");
+  const gHead = allGames.map(g => `<th>G${gameNum(g)}<br><span style="font-weight:500">${esc(fmtDate(g.date, { month: "numeric", day: "numeric" }))}</span></th>`).join("");
+  const gRows = players.map(p => `<tr><td class="name">${esc(p.name)}</td>${allGames.map(g => `<td class="num">${gameCell(g, p.id)}</td>`).join("")}</tr>`).join("");
+  return `<h1>Season</h1>
+    <p class="lede">${counted.length} game${counted.length === 1 ? "" : "s"} recorded. Players have been on the field for ${pct(lo)} to ${pct(hi)} of the quarters they attended.</p>
+    <div class="tscroll"><table><thead><tr><th class="name">Player</th><th>Games</th><th>Qtrs</th><th>Time</th><th>Share</th><th>vs fair</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="sub" style="margin-top:10px">Fair share is 4 divided by the number of players checked in, for each quarter a player was there. Orange means owed time; green means ahead. Players owed the most are suggested first.</p>
+    <section class="block"><h2 class="h2">Game by game</h2><p class="sub">Quarters played. A dash means absent; a question mark means results aren't entered yet.</p>
+    <div class="tscroll"><table><thead><tr><th class="name">Player</th>${gHead}</tr></thead><tbody>${gRows}</tbody></table></div></section>
+    <p style="margin-top:18px"><button class="btn quiet" data-act="csv">Download CSV</button></p>`;
+}
+function gameCell(g, id) {
+  if (g.mode === "manual") { if (g.needsEntry) return "?"; return g.attendance.includes(id) ? Number(g.manualPlayed[id] || 0) : "–"; }
+  if (!g.quarters.length) return "";
+  if (!g.quarters.some(qq => qq.available.includes(id))) return "–";
+  return g.quarters.filter(qq => qq.lineup.includes(id)).length;
+}
+function csv() {
+  const { st, players } = seasonData();
+  const q = v => { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const games = sortedGames().filter(g => g.status !== "cancelled");
+  const lines = [["Player", "Games attended", "Quarters played", "Quarters available", "Minutes", "Play share %", "Fair-share quarters", "Balance"].join(",")];
+  players.forEach(p => { const s = st[p.id]; lines.push([p.name, s.games, s.played, s.avail, s.played * S.quarterMinutes, s.share == null ? "" : Math.round(s.share * 100), f1(s.expected), f1(s.balance)].map(q).join(",")); });
+  lines.push("", ["Player", ...games.map(g => "Game " + gameNum(g) + " (" + g.date + ")")].map(q).join(","));
+  players.forEach(p => lines.push([p.name, ...games.map(g => gameCell(g, p.id))].map(q).join(",")));
+  download("season-playing-time-" + today() + ".csv", lines.join("\n"), "text/csv");
+}
+
+/* ---------- team ---------- */
+function renderTeam() {
+  let hasKey = false; try { hasKey = !!localStorage.getItem("editKey"); } catch (e) {}
+  return `<h1>Team</h1>
+    <section class="block"><label class="field">Team name<input type="text" data-change="teamName" value="${esc(S.teamName)}"></label></section>
+    <section class="block"><h2 class="h2">Players</h2><p class="sub">Rename a player by editing their name. Inactive players keep their history but leave check-in.</p>
+    <div class="plist">${S.players.map(p => `<div class="prow ${p.active ? "" : "inactive"}"><input type="text" aria-label="Player name" data-change="rename" data-id="${p.id}" value="${esc(p.name)}">
+      <button class="btn quiet" data-act="toggleActive" data-id="${p.id}">${p.active ? "Make inactive" : "Make active"}</button></div>`).join("")}</div>
+    <div class="prow" style="margin-top:12px"><input type="text" id="new-player" placeholder="New player name" aria-label="New player name"><button class="btn" data-act="addPlayer">Add player</button></div></section>
+    <section class="block"><h2 class="h2">Data</h2><p class="sub">Everyone with the link shares the same season. Download a backup any time.</p>
+    <div class="row"><button class="btn quiet" data-act="backup">Download backup</button>${hasKey ? `<button class="btn quiet" data-act="clearKey">Forget edit key</button>` : ""}</div></section>`;
+}
+
+/* ---------- actions ---------- */
+const act = {
+  reload: () => location.reload(),
+  addGame() {
+    const last = sortedGames().slice(-1)[0];
+    const date = last ? addDays(last.date, 7) : today(), id = "g" + Date.now().toString(36);
+    op("Add game", d => { d.games.push({ id, date, time: "10:15", opponent: "", status: "scheduled", mode: "live", needsEntry: false, attendance: [], available: [], quarters: [], manualPlayed: {} }); });
+    location.hash = "#/game/" + id;
+  },
+  checkin({ g, id }) { op("Check-in", d => { const x = G(d, g); if (!x || x.status !== "scheduled") return false; const i = x.attendance.indexOf(id); i < 0 ? x.attendance.push(id) : x.attendance.splice(i, 1); }); },
+  start({ g }) { op("Start game", d => { const x = G(d, g); if (!x || x.status !== "scheduled") return false; x.status = "in_progress"; x.mode = "live"; x.available = [...x.attendance]; }); },
+  cancelGame({ g }) { if (!confirm("Mark this game as cancelled? It won't count toward playing time.")) return; op("Cancel game", d => { const x = G(d, g); x.prevStatus = x.status; x.status = "cancelled"; }); },
+  restoreGame({ g }) { op("Restore game", d => { const x = G(d, g); x.status = x.prevStatus && x.prevStatus !== "cancelled" ? x.prevStatus : "scheduled"; delete x.prevStatus; }); },
+  toManual({ g }) { op("Switch to results", d => { const x = G(d, g); if (x.quarters.length) return false; x.mode = "manual"; x.status = "final"; x.needsEntry = true; }); },
+  toLive({ g }) { op("Switch to quarter tracking", d => { const x = G(d, g); if (hasDataRaw(x)) return false; x.mode = "live"; x.status = "scheduled"; x.needsEntry = false; }); },
+  manualHere({ g, id }) { op("Attendance", d => { const x = G(d, g); const i = x.attendance.indexOf(id); if (i < 0) x.attendance.push(id); else { x.attendance.splice(i, 1); delete x.manualPlayed[id]; } }); },
+  manualStep({ g, id, d: delta }) { op("Quarters played", d => { const x = G(d, g); if (!x.attendance.includes(id)) return false; x.manualPlayed[id] = Math.max(0, Math.min(Q, Number(x.manualPlayed[id] || 0) + Number(delta))); }); },
+  saveManual({ g }) { op("Save results", d => { G(d, g).needsEntry = false; }); toast("Results saved"); },
+  tap({ id }) {
+    const c = ui.cur; if (!c) return;
+    const dr = ui.drafts[c.key]; if (!dr) return;
+    const onField = dr.lineup.includes(id);
+    if (ui.sel && ui.sel.key === c.key) {
+      const s = ui.sel.id;
+      if (s === id) { dr.lineup = onField ? dr.lineup.filter(x => x !== id) : [...dr.lineup, id]; dr.touched = true; ui.sel = null; }
+      else if (dr.lineup.includes(s) !== onField) {
+        const fieldId = onField ? id : s, benchId = onField ? s : id;
+        dr.lineup = dr.lineup.map(x => x === fieldId ? benchId : x); dr.touched = true; ui.sel = null;
+      } else ui.sel = { key: c.key, id };
+    } else ui.sel = { key: c.key, id };
+    render();
+  },
+  resetDraft() { if (ui.cur) delete ui.drafts[ui.cur.key]; ui.sel = null; render(); },
+  confirmQ() {
+    const c = ui.cur; if (!c) return;
+    const lineup = [...ui.drafts[c.key].lineup], avail = [...c.A], q = c.q, gid = c.gid;
+    op("Quarter " + (q + 1), d => {
+      const x = G(d, gid);
+      if (!x || x.status !== "in_progress" || x.quarters.length !== q) return false;
+      x.quarters.push({ available: avail, lineup, at: new Date().toISOString() });
+      avail.forEach(id => { if (!x.attendance.includes(id)) x.attendance.push(id); });
+    });
+    delete ui.drafts[c.key]; ui.sel = null; render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  },
+  undoQ({ g, q }) {
+    if (!confirm("Undo quarter " + (Number(q) + 1) + "?")) return;
+    op("Undo quarter", d => { const x = G(d, g); if (x.quarters.length !== Number(q) + 1) return false; x.quarters.pop(); if (x.status === "final") x.status = "in_progress"; });
+    ui.drafts = {}; ui.sel = null;
+  },
+  finish({ g }) { op("Finish game", d => { const x = G(d, g); if (x.quarters.length < Q) return false; x.status = "final"; }); window.scrollTo(0, 0); },
+  reopen({ g }) { op("Reopen game", d => { const x = G(d, g); x.status = "in_progress"; const last = x.quarters[x.quarters.length - 1]; if (last) x.available = [...last.available]; }); },
+  toggleAvail({ g, id }) {
+    op("Availability", d => { const x = G(d, g); const i = x.available.indexOf(id); if (i < 0) { x.available.push(id); if (!x.attendance.includes(id)) x.attendance.push(id); } else x.available.splice(i, 1); });
+  },
+  editQ({ g, q }) { ui.editQ = { gid: g, q: Number(q) }; renderSheet(); },
+  closeSheet() { ui.editQ = null; renderSheet(); },
+  setQ({ id, v }) {
+    const { gid, q } = ui.editQ;
+    op("Edit quarter", d => {
+      const x = G(d, gid), qq = x && x.quarters[q]; if (!qq) return false;
+      qq.lineup = qq.lineup.filter(i => i !== id); qq.available = qq.available.filter(i => i !== id);
+      if (v !== "out") { qq.available.push(id); if (!x.attendance.includes(id)) x.attendance.push(id); }
+      if (v === "played") qq.lineup.push(id);
+    });
+    ui.drafts = {};
+  },
+  saveDetails({ g }) {
+    const date = $("det-date").value, time = $("det-time").value, opp = $("det-opp").value.trim();
+    if (!date || !time) { toast("Enter a date and start time."); return; }
+    op("Game details", d => { const x = G(d, g); x.date = date; x.time = time; x.opponent = opp; }); toast("Details saved");
+  },
+  deleteGame({ g }) { if (!confirm("Delete this game from the schedule?")) return; op("Delete game", d => { const x = G(d, g); if (hasDataRaw(x)) return false; d.games = d.games.filter(y => y.id !== g); }); location.hash = "#/games"; },
+  csv, backup() { download("soccer-rotation-backup-" + today() + ".json", JSON.stringify(S, null, 2), "application/json"); },
+  addPlayer() {
+    const el = $("new-player"), name = el.value.trim(); if (!name) { el.focus(); return; }
+    const id = "p" + Date.now().toString(36); el.value = ""; el.blur();
+    op("Add player", d => { d.players.push({ id, name, active: true }); });
+  },
+  toggleActive({ id }) { op("Player status", d => { const p = d.players.find(x => x.id === id); p.active = !p.active; }); },
+  clearKey() { try { localStorage.removeItem("editKey"); } catch (e) {} render(); },
+};
+function hasDataRaw(g) { return g.quarters.length > 0 || Object.values(g.manualPlayed || {}).some(v => v > 0); }
+
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (el && !el.disabled && act[el.dataset.act]) { e.preventDefault(); act[el.dataset.act](el.dataset, el); return; }
+  if (e.target.id === "sheet") act.closeSheet();
+});
+document.addEventListener("change", e => {
+  const el = e.target.closest("[data-change]"); if (!el) return;
+  const v = el.value.trim();
+  if (el.dataset.change === "teamName" && v) op("Team name", d => { d.teamName = v; });
+  if (el.dataset.change === "rename" && v) { const id = el.dataset.id; op("Rename", d => { d.players.find(p => p.id === id).name = v; }); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && ui.editQ) act.closeSheet();
+  if (e.key === "Enter" && e.target.id === "new-player") act.addPlayer();
+});
+
+load();
+</script>
+</body>
+</html>

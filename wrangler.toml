@@ -1,0 +1,15 @@
+name = "soccer-rotation"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "soccer-rotation"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Optional: require a shared edit key for saving changes.
+# Set it with:  npx wrangler secret put EDIT_KEY
