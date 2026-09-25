@@ -9,7 +9,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "soccer-rotation"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "28e5bf63-df58-4e65-ba9e-636e91e6fd4c"
 
 # Optional: require a shared edit key for saving changes.
 # Set it with:  npx wrangler secret put EDIT_KEY
