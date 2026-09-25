@@ -43,7 +43,7 @@ a{color:inherit}
 .net::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--turf)}
 .net.saving::before{background:var(--pinnie)}
 .net.offline::before,.net.error::before{background:var(--red)}
-main{padding-top:18px;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+main.wrap{padding-top:18px;padding-bottom:calc(160px + env(safe-area-inset-bottom,0px))}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav.tabs .wrap{display:grid;grid-template-columns:repeat(3,1fr)}
 nav.tabs a{display:flex;align-items:center;justify-content:center;height:58px;text-decoration:none;font:600 19px/1 var(--display);color:var(--muted);border-top:3px solid transparent}
@@ -293,8 +293,17 @@ function quarterContext(g, q, A) {
   return { ctx, remainingInHalf: hs + 3 - q, remainingInGame: Q - 1 - q };
 }
 
+// Players who have been available for every quarter of this game so far.
+function fullGamePlayers(g, q, A) {
+  const prev = g.quarters.slice(0, q);
+  return A.filter(id => prev.every(qq => qq.available.includes(id)));
+}
+const spreadOf = vals => vals.length ? Math.max(...vals) - Math.min(...vals) : 0;
+
 // Suggest the lineup for quarter q.
 // Hard rules: nobody sits a 3rd straight quarter; everybody plays at least once per half.
+// Within-game cap: players here the whole game stay within 1 quarter of each other,
+// so season catch-up happens through who gets the extra quarter, not big swings in one game.
 // Within the rules, players furthest below their season fair share go in first.
 function suggest(g, q, A) {
   const target = Math.min(ON, A.length);
@@ -326,17 +335,25 @@ function suggest(g, q, A) {
     for (let k = 1; k <= maxD; k++) if (ds.filter(d => d <= k).length > ON * k) return false;
     return true;
   };
-  let best = null, bestS = -Infinity, hard = null, hardS = -Infinity;
+  const full = fullGamePlayers(g, q, A);
+  const capLimit = Math.max(1, spreadOf(full.map(id => ctx[id].playedGame)));
+  const capOk = C => { const s = new Set(C); return spreadOf(full.map(id => ctx[id].playedGame + (s.has(id) ? 1 : 0))) <= capLimit; };
+  // Tiers, best first: all rules + lookahead; all rules; sitting rules + lookahead; sitting rules only.
+  const tiers = [null, null, null, null], tierS = [-Infinity, -Infinity, -Infinity, -Infinity];
   if (A.length <= 16) {
     for (const C of combos(A, target)) {
       if (!hardOk(C)) continue;
       const sc = C.reduce((t, id) => t + score[id], 0);
-      if (sc > hardS) { hardS = sc; hard = C; }
-      if (sc > bestS && futureOk(C)) { bestS = sc; best = C; }
+      const cap = capOk(C), fut = futureOk(C);
+      const flags = [cap && fut, cap, fut, true];
+      flags.forEach((ok, i) => { if (ok && sc > tierS[i]) { tierS[i] = sc; tiers[i] = C; } });
     }
   }
-  if (best) return { lineup: sortRoster(best), note: "" };
-  if (hard) return { lineup: sortRoster(hard), note: "This lineup meets the rules now, but a later quarter may not be able to." };
+  const capNote = "Playing time this game can't stay within 1 quarter without breaking the sitting rules.";
+  if (tiers[0]) return { lineup: sortRoster(tiers[0]), note: "" };
+  if (tiers[1]) return { lineup: sortRoster(tiers[1]), note: "This lineup meets the rules now, but a later quarter may not be able to." };
+  if (tiers[2]) return { lineup: sortRoster(tiers[2]), note: capNote };
+  if (tiers[3]) return { lineup: sortRoster(tiers[3]), note: capNote };
   const pri = id => (ctx[id].streak >= 2 ? 1000 : 0) + (remainingInHalf === 0 && ctx[id].playedHalf === 0 ? 500 : 0) + score[id];
   const fb = [...A].sort((a, b) => pri(b) - pri(a)).slice(0, target);
   return { lineup: sortRoster(fb), note: "Not every rule can be met with the players here. The players furthest behind go in first." };
@@ -350,6 +367,14 @@ function lineupWarnings(g, q, A, lineup) {
     if (on.has(id)) continue;
     if (ctx[id].streak >= 2) w.push(nameOf(id) + " would sit a 3rd quarter in a row");
     if (remainingInHalf === 0 && ctx[id].playedHalf === 0) w.push(nameOf(id) + " hasn't played yet this half");
+  }
+  const full = fullGamePlayers(g, q, A);
+  const before = full.map(id => ctx[id].playedGame);
+  const after = full.map(id => ctx[id].playedGame + (on.has(id) ? 1 : 0));
+  if (spreadOf(after) > Math.max(1, spreadOf(before))) {
+    const lo = Math.min(...after);
+    const behind = full.filter((id, i) => after[i] === lo).map(nameOf);
+    w.push(behind.join(", ") + " would fall 2 quarters behind for this game");
   }
   const target = Math.min(ON, A.length);
   if (lineup.length !== target) w.push(lineup.length + " on the field (normally " + target + ")");
@@ -638,15 +663,18 @@ function renderLive(g) {
       <div class="qactions">
         <button class="btn primary wide" data-act="confirmQ" ${A.length ? "" : "disabled"}>Confirm quarter ${q + 1}</button>
         <div class="row">${dr.touched ? `<button class="btn quiet" data-act="resetDraft">Use suggestion</button>` : ""}
-        ${q > 0 ? `<button class="btn quiet" data-act="undoQ" data-g="${g.id}" data-q="${q - 1}">Undo quarter ${q}</button>` : ""}</div>
+        ${q > 0 ? `<button class="btn quiet" data-act="undoQ" data-g="${g.id}" data-q="${q - 1}">Undo quarter ${q}</button>` : ""}
+        <button class="btn danger" data-act="resetGame" data-g="${g.id}">Reset game</button></div>
       </div></section>`;
   } else if (g.status === "in_progress") {
     html += qTrack(g, Q) + `<section class="block"><div class="empty">All 8 quarters are recorded. Review the grid below, then finish the game.</div>
       <div class="stack" style="margin-top:12px"><button class="btn primary wide" data-act="finish" data-g="${g.id}">Finish game</button>
-      <button class="btn quiet" data-act="undoQ" data-g="${g.id}" data-q="${Q - 1}">Undo quarter 8</button></div></section>`;
+      <div class="row"><button class="btn quiet" data-act="undoQ" data-g="${g.id}" data-q="${Q - 1}">Undo quarter 8</button>
+      <button class="btn danger" data-act="resetGame" data-g="${g.id}">Reset game</button></div></div></section>`;
   } else {
     html += `<section class="block"><p class="sub">Tap a quarter in the grid to correct it. Changes update season totals right away.</p>
-      <button class="btn quiet" data-act="reopen" data-g="${g.id}">Reopen game</button></section>`;
+      <div class="row"><button class="btn quiet" data-act="reopen" data-g="${g.id}">Reopen game</button>
+      <button class="btn danger" data-act="resetGame" data-g="${g.id}">Reset game</button></div></section>`;
   }
   if (g.status === "in_progress") html += availSection(g);
   html += quarterGrid(g) + detailsSection(g);
@@ -725,7 +753,8 @@ function renderManual(g) {
       ${g.needsEntry ? `<button class="btn primary wide" data-act="saveManual" data-g="${g.id}" ${here.length ? "" : "disabled"}>Save results</button>`
         : `<p class="sub">Results are saved and count toward the season. Edits save as you go.</p>`}
       <div class="row">${!hasData(g) ? `<button class="btn quiet" data-act="toLive" data-g="${g.id}">Track quarter by quarter instead</button>` : ""}
-      <button class="btn quiet" data-act="cancelGame" data-g="${g.id}">Mark cancelled</button></div>
+      <button class="btn quiet" data-act="cancelGame" data-g="${g.id}">Mark cancelled</button>
+      ${hasData(g) || g.attendance.length ? `<button class="btn danger" data-act="resetGame" data-g="${g.id}">Reset game</button>` : ""}</div>
     </div></section>` + detailsSection(g);
 }
 
@@ -755,7 +784,7 @@ function renderSeason() {
   return `<h1>Season</h1>
     <p class="lede">${counted.length} game${counted.length === 1 ? "" : "s"} recorded. Players have been on the field for ${pct(lo)} to ${pct(hi)} of the quarters they attended.</p>
     <div class="tscroll"><table><thead><tr><th class="name">Player</th><th>Games</th><th>Qtrs</th><th>Time</th><th>Share</th><th>vs fair</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="sub" style="margin-top:10px">Fair share is 4 divided by the number of players checked in, for each quarter a player was there. Orange means owed time; green means ahead. Players owed the most are suggested first.</p>
+    <p class="sub" style="margin-top:10px">Fair share is 4 divided by the number of players checked in, for each quarter a player was there. Orange means owed time; green means ahead. Within a game, players who are there the whole time stay within 1 quarter of each other, and the extra quarters go to the players owed the most.</p>
     <section class="block"><h2 class="h2">Game by game</h2><p class="sub">Quarters played. A dash means absent; a question mark means results aren't entered yet.</p>
     <div class="tscroll"><table><thead><tr><th class="name">Player</th>${gHead}</tr></thead><tbody>${gRows}</tbody></table></div></section>
     <p style="margin-top:18px"><button class="btn quiet" data-act="csv">Download CSV</button></p>`;
@@ -839,6 +868,19 @@ const act = {
     if (!confirm("Undo quarter " + (Number(q) + 1) + "?")) return;
     op("Undo quarter", d => { const x = G(d, g); if (x.quarters.length !== Number(q) + 1) return false; x.quarters.pop(); if (x.status === "final") x.status = "in_progress"; });
     ui.drafts = {}; ui.sel = null;
+  },
+  resetGame({ g }) {
+    const x0 = S.games.find(x => x.id === g);
+    if (!x0 || !confirm("Reset Game " + gameNum(x0) + "? This clears check-in and every recorded quarter for this game. It can't be undone.")) return;
+    op("Reset game", d => {
+      const x = G(d, g); if (!x) return false;
+      const past = x.date < today();
+      Object.assign(x, { status: past ? "final" : "scheduled", mode: past ? "manual" : "live", needsEntry: past,
+        attendance: [], available: [], quarters: [], manualPlayed: {} });
+      delete x.prevStatus;
+    });
+    ui.drafts = {}; ui.sel = null; ui.editQ = null;
+    toast("Game reset"); window.scrollTo(0, 0);
   },
   finish({ g }) { op("Finish game", d => { const x = G(d, g); if (x.quarters.length < Q) return false; x.status = "final"; }); window.scrollTo(0, 0); },
   reopen({ g }) { op("Reopen game", d => { const x = G(d, g); x.status = "in_progress"; const last = x.quarters[x.quarters.length - 1]; if (last) x.available = [...last.available]; }); },
